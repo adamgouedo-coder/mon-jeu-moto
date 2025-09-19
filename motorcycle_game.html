@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jeu de Moto 3D</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+            color: white;
+        }
+
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            z-index: 100;
+            background: rgba(0,0,0,0.5);
+            padding: 15px;
+            border-radius: 10px;
+        }
+
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            display: none;
+            z-index: 200;
+            border: 2px solid #ff6600;
+        }
+
+        #gameOver h2 {
+            margin-top: 0;
+            color: #ff6600;
+            font-size: 32px;
+        }
+
+        #restartBtn {
+            background: linear-gradient(45deg, #ff6600, #ff8800);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: transform 0.2s;
+        }
+
+        #restartBtn:hover {
+            transform: scale(1.05);
+        }
+
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            font-size: 16px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+            background: rgba(0,0,0,0.5);
+            padding: 15px;
+            border-radius: 10px;
+        }
+
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 300;
+        }
+
+        #startBtn {
+            background: linear-gradient(45deg, #ff6600, #ff8800);
+            color: white;
+            border: none;
+            padding: 20px 40px;
+            font-size: 24px;
+            border-radius: 15px;
+            cursor: pointer;
+            margin-top: 30px;
+            transition: transform 0.2s;
+        }
+
+        #startBtn:hover {
+            transform: scale(1.05);
+        }
+
+        .title {
+            font-size: 48px;
+            color: #ff6600;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="startScreen">
+            <h1 class="title">🏍️ MOTO 3D</h1>
+            <p style="font-size: 20px; text-align: center; max-width: 600px;">
+                Foncez sur l'autoroute et évitez les obstacles !<br>
+                Utilisez les flèches ← → pour diriger votre moto.<br>
+                Appuyez sur ESPACE pour sauter par-dessus les obstacles !
+            </p>
+            <button id="startBtn">COMMENCER</button>
+        </div>
+        
+        <div id="ui">
+            <div>🏆 Score: <span id="score">0</span></div>
+            <div>⚡ Vitesse: <span id="speed">1</span></div>
+            <div>💨 Distance: <span id="distance">0</span>m</div>
+            <div id="jumpCooldownBar" style="margin-top: 10px;">
+                🚀 Saut: <span id="jumpStatus">PRÊT</span>
+                <div style="width: 100px; height: 8px; background: rgba(255,255,255,0.3); border-radius: 4px; margin-top: 5px; overflow: hidden;">
+                    <div id="jumpCooldownFill" style="width: 100%; height: 100%; background: #00ff00; border-radius: 4px; transition: width 0.1s;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="gameOver">
+            <h2>💥 CRASH!</h2>
+            <p style="font-size: 18px;">Score final: <span id="finalScore">0</span></p>
+            <p style="font-size: 16px;">Distance parcourue: <span id="finalDistance">0</span>m</p>
+            <button id="restartBtn">🔄 RECOMMENCER</button>
+        </div>
+
+        <div id="instructions">
+            <div>🎮 Contrôles:</div>
+            <div>← → Diriger la moto</div>
+            <div>ESPACE Saut (cooldown 3s)</div>
+            <div>🎯 Évitez les obstacles rouges!</div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Variables globales
+        let scene, camera, renderer, motorcycle;
+        let gameRunning = false;
+        let gameStarted = false;
+        let score = 0;
+        let distance = 0;
+        let gameSpeed = 0.2;
+        let obstacles = [];
+        let roadSegments = [];
+        let trees = [];
+        
+        // Variables de saut
+        let isJumping = false;
+        let jumpHeight = 0;
+        let jumpSpeed = 0;
+        let jumpCooldown = 0;
+        const JUMP_COOLDOWN_TIME = 180; // 3 secondes à 60fps
+        const JUMP_FORCE = 0.4;
+
+        // Éléments UI
+        const scoreElement = document.getElementById('score');
+        const speedElement = document.getElementById('speed');
+        const distanceElement = document.getElementById('distance');
+        const jumpStatusElement = document.getElementById('jumpStatus');
+        const jumpCooldownFill = document.getElementById('jumpCooldownFill');
+        const gameOverDiv = document.getElementById('gameOver');
+        const startScreen = document.getElementById('startScreen');
+        const finalScoreElement = document.getElementById('finalScore');
+        const finalDistanceElement = document.getElementById('finalDistance');
+        const restartBtn = document.getElementById('restartBtn');
+        const startBtn = document.getElementById('startBtn');
+
+        // Contrôles
+        const keys = {};
+        let mouseX = 0;
+
+        // Initialisation
+        function init() {
+            // Créer la scène
+            scene = new THREE.Scene();
+            scene.fog = new THREE.Fog(0x87CEEB, 50, 300);
+
+            // Créer la caméra
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 8, 10);
+            camera.lookAt(0, 0, -20);
+
+            // Créer le renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x87CEEB);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.getElementById('gameContainer').appendChild(renderer.domElement);
+
+            // Ajouter l'éclairage
+            setupLighting();
+            
+            // Créer la route
+            createRoad();
+            
+            // Créer la moto
+            createMotorcycle();
+            
+            // Créer l'environnement
+            createEnvironment();
+
+            // Événements
+            setupEventListeners();
+            
+            // Démarrer le rendu
+            animate();
+        }
+
+        function setupLighting() {
+            // Lumière ambiante
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+            scene.add(ambientLight);
+
+            // Lumière directionnelle (soleil)
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(50, 100, 50);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            directionalLight.shadow.camera.near = 0.5;
+            directionalLight.shadow.camera.far = 500;
+            directionalLight.shadow.camera.left = -100;
+            directionalLight.shadow.camera.right = 100;
+            directionalLight.shadow.camera.top = 100;
+            directionalLight.shadow.camera.bottom = -100;
+            scene.add(directionalLight);
+        }
+
+        function createRoad() {
+            // Créer plusieurs segments de route
+            for (let i = 0; i < 20; i++) {
+                const roadGeometry = new THREE.PlaneGeometry(20, 20);
+                const roadMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
+                const roadSegment = new THREE.Mesh(roadGeometry, roadMaterial);
+                
+                roadSegment.rotation.x = -Math.PI / 2;
+                roadSegment.position.set(0, 0, -i * 20);
+                roadSegment.receiveShadow = true;
+                
+                scene.add(roadSegment);
+                roadSegments.push(roadSegment);
+
+                // Ajouter les lignes blanches
+                const lineGeometry = new THREE.PlaneGeometry(0.5, 18);
+                const lineMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                
+                // Lignes de côté
+                const leftLine = new THREE.Mesh(lineGeometry, lineMaterial);
+                leftLine.rotation.x = -Math.PI / 2;
+                leftLine.position.set(-9, 0.01, -i * 20);
+                scene.add(leftLine);
+                
+                const rightLine = new THREE.Mesh(lineGeometry, lineMaterial);
+                rightLine.rotation.x = -Math.PI / 2;
+                rightLine.position.set(9, 0.01, -i * 20);
+                scene.add(rightLine);
+
+                // Ligne centrale pointillée
+                if (i % 2 === 0) {
+                    const centerLineGeometry = new THREE.PlaneGeometry(0.3, 10);
+                    const centerLineMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+                    const centerLine = new THREE.Mesh(centerLineGeometry, centerLineMaterial);
+                    centerLine.rotation.x = -Math.PI / 2;
+                    centerLine.position.set(0, 0.02, -i * 20);
+                    scene.add(centerLine);
+                }
+            }
+        }
+
+        function createMotorcycle() {
+            motorcycle = new THREE.Group();
+            
+            // Châssis principal - forme plus sportive
+            const mainFrameGeometry = new THREE.BoxGeometry(0.8, 0.4, 2.5);
+            const mainFrameMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0xff4400, 
+                shininess: 100,
+                specular: 0x222222 
+            });
+            const mainFrame = new THREE.Mesh(mainFrameGeometry, mainFrameMaterial);
+            mainFrame.position.set(0, 0.8, 0);
+            mainFrame.castShadow = true;
+            motorcycle.add(mainFrame);
+
+            // Réservoir d'essence - forme arrondie
+            const tankGeometry = new THREE.SphereGeometry(0.6, 12, 8);
+            tankGeometry.scale(1, 0.7, 1.3);
+            const tankMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0xff6600, 
+                shininess: 200,
+                specular: 0x444444 
+            });
+            const tank = new THREE.Mesh(tankGeometry, tankMaterial);
+            tank.position.set(0, 1.2, -0.3);
+            tank.castShadow = true;
+            motorcycle.add(tank);
+
+            // Selle
+            const seatGeometry = new THREE.BoxGeometry(0.7, 0.15, 1.2);
+            const seatMaterial = new THREE.MeshLambertMaterial({ color: 0x222222 });
+            const seat = new THREE.Mesh(seatGeometry, seatMaterial);
+            seat.position.set(0, 1.05, 0.6);
+            seat.castShadow = true;
+            motorcycle.add(seat);
+
+            // Guidon avec poignées
+            const handlebarGeometry = new THREE.CylinderGeometry(0.04, 0.04, 1.4);
+            const handlebarMaterial = new THREE.MeshPhongMaterial({ color: 0x888888 });
+            const handlebar = new THREE.Mesh(handlebarGeometry, handlebarMaterial);
+            handlebar.rotation.z = Math.PI / 2;
+            handlebar.position.set(0, 1.4, -1.0);
+            handlebar.castShadow = true;
+            motorcycle.add(handlebar);
+
+            // Poignées
+            const gripGeometry = new THREE.CylinderGeometry(0.06, 0.06, 0.15);
+            const gripMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+            [-0.7, 0.7].forEach(x => {
+                const grip = new THREE.Mesh(gripGeometry, gripMaterial);
+                grip.rotation.z = Math.PI / 2;
+                grip.position.set(x, 1.4, -1.0);
+                motorcycle.add(grip);
+            });
+
+            // Fourche avant
+            const forkGeometry = new THREE.CylinderGeometry(0.08, 0.08, 1.2);
+            const forkMaterial = new THREE.MeshPhongMaterial({ color: 0x666666 });
+            [-0.15, 0.15].forEach(x => {
+                const fork = new THREE.Mesh(forkGeometry, forkMaterial);
+                fork.position.set(x, 0.9, -1.2);
+                fork.castShadow = true;
+                motorcycle.add(fork);
+            });
+
+            // Roues avec jantes détaillées
+            const wheelGeometry = new THREE.CylinderGeometry(0.65, 0.65, 0.25);
+            const tireGeometry = new THREE.CylinderGeometry(0.68, 0.68, 0.22);
+            const rimGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.28);
+            
+            const tireMaterial = new THREE.MeshLambertMaterial({ color: 0x111111 });
+            const rimMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0xaaaaaa, 
+                shininess: 150 
+            });
+
+            // Roue avant
+            const frontTire = new THREE.Mesh(tireGeometry, tireMaterial);
+            frontTire.rotation.z = Math.PI / 2;
+            frontTire.position.set(0, 0.65, -1.2);
+            frontTire.castShadow = true;
+            motorcycle.add(frontTire);
+
+            const frontRim = new THREE.Mesh(rimGeometry, rimMaterial);
+            frontRim.rotation.z = Math.PI / 2;
+            frontRim.position.set(0, 0.65, -1.2);
+            frontRim.castShadow = true;
+            motorcycle.add(frontRim);
+
+            // Rayons de roue avant
+            for (let i = 0; i < 8; i++) {
+                const spokeGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.35);
+                const spokeMaterial = new THREE.MeshPhongMaterial({ color: 0x999999 });
+                const spoke = new THREE.Mesh(spokeGeometry, spokeMaterial);
+                spoke.rotation.x = (i * Math.PI) / 4;
+                spoke.rotation.z = Math.PI / 2;
+                spoke.position.set(0, 0.65, -1.2);
+                motorcycle.add(spoke);
+            }
+
+            // Roue arrière
+            const rearTire = new THREE.Mesh(tireGeometry, tireMaterial);
+            rearTire.rotation.z = Math.PI / 2;
+            rearTire.position.set(0, 0.65, 1.2);
+            rearTire.castShadow = true;
+            motorcycle.add(rearTire);
+
+            const rearRim = new THREE.Mesh(rimGeometry, rimMaterial);
+            rearRim.rotation.z = Math.PI / 2;
+            rearRim.position.set(0, 0.65, 1.2);
+            rearRim.castShadow = true;
+            motorcycle.add(rearRim);
+
+            // Rayons de roue arrière
+            for (let i = 0; i < 8; i++) {
+                const spokeGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.35);
+                const spokeMaterial = new THREE.MeshPhongMaterial({ color: 0x999999 });
+                const spoke = new THREE.Mesh(spokeGeometry, spokeMaterial);
+                spoke.rotation.x = (i * Math.PI) / 4;
+                spoke.rotation.z = Math.PI / 2;
+                spoke.position.set(0, 0.65, 1.2);
+                motorcycle.add(spoke);
+            }
+
+            // Échappement
+            const exhaustGeometry = new THREE.CylinderGeometry(0.08, 0.12, 1.5);
+            const exhaustMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0x333333, 
+                shininess: 100 
+            });
+            const exhaust = new THREE.Mesh(exhaustGeometry, exhaustMaterial);
+            exhaust.rotation.x = Math.PI / 2;
+            exhaust.position.set(0.4, 0.5, 0.8);
+            exhaust.castShadow = true;
+            motorcycle.add(exhaust);
+
+            // Phare avant
+            const headlightGeometry = new THREE.SphereGeometry(0.15);
+            const headlightMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0xffffcc,
+                emissive: 0x222200,
+                transparent: true,
+                opacity: 0.9
+            });
+            const headlight = new THREE.Mesh(headlightGeometry, headlightMaterial);
+            headlight.position.set(0, 1.1, -1.5);
+            headlight.castShadow = true;
+            motorcycle.add(headlight);
+
+            // Feu arrière
+            const taillightGeometry = new THREE.SphereGeometry(0.08);
+            const taillightMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0xff2222,
+                emissive: 0x220000
+            });
+            const taillight = new THREE.Mesh(taillightGeometry, taillightMaterial);
+            taillight.position.set(0, 1.0, 1.6);
+            motorcycle.add(taillight);
+
+            motorcycle.position.set(0, 0, 0);
+            scene.add(motorcycle);
+        }
+
+        function createEnvironment() {
+            // Créer des arbres sur les côtés
+            for (let i = 0; i < 50; i++) {
+                createTree(-25 + Math.random() * -10, -i * 10);
+                createTree(25 + Math.random() * 10, -i * 10);
+            }
+        }
+
+        function createTree(x, z) {
+            const tree = new THREE.Group();
+            
+            // Tronc
+            const trunkGeometry = new THREE.CylinderGeometry(0.3, 0.5, 4);
+            const trunkMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+            const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+            trunk.position.y = 2;
+            trunk.castShadow = true;
+            tree.add(trunk);
+
+            // Feuillage
+            const foliageGeometry = new THREE.SphereGeometry(2.5);
+            const foliageMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+            const foliage = new THREE.Mesh(foliageGeometry, foliageMaterial);
+            foliage.position.y = 5;
+            foliage.castShadow = true;
+            tree.add(foliage);
+
+            tree.position.set(x, 0, z);
+            scene.add(tree);
+            trees.push(tree);
+        }
+
+        function createObstacle(x, z) {
+            const obstacle = new THREE.Group();
+            
+            // Châssis principal de la voiture - forme plus réaliste
+            const bodyGeometry = new THREE.BoxGeometry(1.8, 0.8, 4.2);
+            const bodyMaterial = new THREE.MeshPhongMaterial({ 
+                color: Math.random() > 0.5 ? 0xcc0000 : 0x0066cc,
+                shininess: 150,
+                specular: 0x333333
+            });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.y = 1.0;
+            body.castShadow = true;
+            obstacle.add(body);
+
+            // Toit de la voiture
+            const roofGeometry = new THREE.BoxGeometry(1.6, 0.8, 2.5);
+            const roofMaterial = new THREE.MeshPhongMaterial({ 
+                color: bodyMaterial.color.getHex(),
+                shininess: 150
+            });
+            const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+            roof.position.set(0, 1.6, -0.3);
+            roof.castShadow = true;
+            obstacle.add(roof);
+
+            // Pare-brise avant
+            const windshieldGeometry = new THREE.BoxGeometry(1.5, 0.7, 0.1);
+            const windshieldMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0x88ccff,
+                transparent: true,
+                opacity: 0.7,
+                shininess: 200
+            });
+            const windshield = new THREE.Mesh(windshieldGeometry, windshieldMaterial);
+            windshield.position.set(0, 1.6, -1.8);
+            windshield.rotation.x = -0.2;
+            obstacle.add(windshield);
+
+            // Pare-brise arrière
+            const rearWindowGeometry = new THREE.BoxGeometry(1.5, 0.6, 0.1);
+            const rearWindow = new THREE.Mesh(rearWindowGeometry, windshieldMaterial);
+            rearWindow.position.set(0, 1.6, 1.2);
+            rearWindow.rotation.x = 0.2;
+            obstacle.add(rearWindow);
+
+            // Vitres latérales
+            [-0.9, 0.9].forEach(side => {
+                const sideWindowGeometry = new THREE.BoxGeometry(0.05, 0.6, 2.0);
+                const sideWindow = new THREE.Mesh(sideWindowGeometry, windshieldMaterial);
+                sideWindow.position.set(side, 1.6, -0.3);
+                obstacle.add(sideWindow);
+            });
+
+            // Grille avant
+            const grillGeometry = new THREE.BoxGeometry(1.6, 0.4, 0.1);
+            const grillMaterial = new THREE.MeshPhongMaterial({ color: 0x222222 });
+            const grill = new THREE.Mesh(grillGeometry, grillMaterial);
+            grill.position.set(0, 1.0, -2.2);
+            obstacle.add(grill);
+
+            // Phares avant
+            [-0.6, 0.6].forEach(side => {
+                const headlightGeometry = new THREE.SphereGeometry(0.2);
+                const headlightMaterial = new THREE.MeshPhongMaterial({ 
+                    color: 0xffffcc,
+                    emissive: 0x111100,
+                    transparent: true,
+                    opacity: 0.9
+                });
+                const headlight = new THREE.Mesh(headlightGeometry, headlightMaterial);
+                headlight.position.set(side, 1.0, -2.15);
+                obstacle.add(headlight);
+            });
+
+            // Feux arrière
+            [-0.7, 0.7].forEach(side => {
+                const taillightGeometry = new THREE.BoxGeometry(0.25, 0.15, 0.08);
+                const taillightMaterial = new THREE.MeshPhongMaterial({ 
+                    color: 0xff2222,
+                    emissive: 0x220000
+                });
+                const taillight = new THREE.Mesh(taillightGeometry, taillightMaterial);
+                taillight.position.set(side, 1.0, 2.15);
+                obstacle.add(taillight);
+            });
+
+            // Roues avec jantes détaillées
+            const tireGeometry = new THREE.CylinderGeometry(0.45, 0.45, 0.25);
+            const rimGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.28);
+            
+            const tireMaterial = new THREE.MeshLambertMaterial({ color: 0x111111 });
+            const rimMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0x888888, 
+                shininess: 200 
+            });
+
+            // Positions des roues
+            const wheelPositions = [
+                [-1.0, 0.45, -1.5], // avant gauche
+                [1.0, 0.45, -1.5],  // avant droite
+                [-1.0, 0.45, 1.5],  // arrière gauche
+                [1.0, 0.45, 1.5]    // arrière droite
+            ];
+
+            wheelPositions.forEach(pos => {
+                // Pneu
+                const tire = new THREE.Mesh(tireGeometry, tireMaterial);
+                tire.rotation.z = Math.PI / 2;
+                tire.position.set(pos[0], pos[1], pos[2]);
+                tire.castShadow = true;
+                obstacle.add(tire);
+
+                // Jante
+                const rim = new THREE.Mesh(rimGeometry, rimMaterial);
+                rim.rotation.z = Math.PI / 2;
+                rim.position.set(pos[0], pos[1], pos[2]);
+                rim.castShadow = true;
+                obstacle.add(rim);
+
+                // Rayons de jante
+                for (let i = 0; i < 5; i++) {
+                    const spokeGeometry = new THREE.BoxGeometry(0.03, 0.25, 0.02);
+                    const spokeMaterial = new THREE.MeshPhongMaterial({ color: 0xaaaaaa });
+                    const spoke = new THREE.Mesh(spokeGeometry, spokeMaterial);
+                    spoke.rotation.z = (i * Math.PI * 2) / 5;
+                    spoke.position.set(pos[0], pos[1], pos[2]);
+                    obstacle.add(spoke);
+                }
+            });
+
+            // Pare-chocs avant
+            const frontBumperGeometry = new THREE.BoxGeometry(1.9, 0.2, 0.3);
+            const bumperMaterial = new THREE.MeshPhongMaterial({ color: 0x333333 });
+            const frontBumper = new THREE.Mesh(frontBumperGeometry, bumperMaterial);
+            frontBumper.position.set(0, 0.6, -2.3);
+            frontBumper.castShadow = true;
+            obstacle.add(frontBumper);
+
+            // Pare-chocs arrière
+            const rearBumper = new THREE.Mesh(frontBumperGeometry, bumperMaterial);
+            rearBumper.position.set(0, 0.6, 2.3);
+            rearBumper.castShadow = true;
+            obstacle.add(rearBumper);
+
+            // Rétroviseurs
+            [-0.95, 0.95].forEach(side => {
+                const mirrorGeometry = new THREE.BoxGeometry(0.15, 0.08, 0.05);
+                const mirrorMaterial = new THREE.MeshPhongMaterial({ color: 0x222222 });
+                const mirror = new THREE.Mesh(mirrorGeometry, mirrorMaterial);
+                mirror.position.set(side, 1.8, -1.2);
+                obstacle.add(mirror);
+
+                // Support de rétroviseur
+                const supportGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.2);
+                const support = new THREE.Mesh(supportGeometry, mirrorMaterial);
+                support.position.set(side, 1.7, -1.2);
+                obstacle.add(support);
+            });
+
+            obstacle.position.set(x, 0, z);
+            scene.add(obstacle);
+            obstacles.push(obstacle);
+        }
+
+        function setupEventListeners() {
+            document.addEventListener('keydown', (e) => {
+                keys[e.key] = true;
+            });
+
+            document.addEventListener('keyup', (e) => {
+                keys[e.key] = false;
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                mouseX = (e.clientX / window.innerWidth) * 2 - 1;
+            });
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            startBtn.addEventListener('click', startGame);
+            restartBtn.addEventListener('click', restartGame);
+        }
+
+        function startGame() {
+            gameStarted = true;
+            gameRunning = true;
+            startScreen.style.display = 'none';
+        }
+
+        function restartGame() {
+            // Nettoyer les obstacles
+            obstacles.forEach(obstacle => {
+                scene.remove(obstacle);
+            });
+            obstacles = [];
+
+            // Réinitialiser les variables
+            score = 0;
+            distance = 0;
+            gameSpeed = 0.2;
+            motorcycle.position.set(0, 0, 0);
+            motorcycle.rotation.set(0, 0, 0);
+            
+            // Réinitialiser les variables de saut
+            isJumping = false;
+            jumpHeight = 0;
+            jumpSpeed = 0;
+            jumpCooldown = 0;
+            
+            gameRunning = true;
+            gameOverDiv.style.display = 'none';
+        }
+
+        function spawnObstacle() {
+            const lanes = [-6, -3, 0, 3, 6];
+            const x = lanes[Math.floor(Math.random() * lanes.length)];
+            createObstacle(x, -200 - Math.random() * 100);
+        }
+
+        function checkCollisions() {
+            obstacles.forEach((obstacle, index) => {
+                const motorcyclePos = motorcycle.position;
+                const obstaclePos = obstacle.position;
+                
+                const dx = motorcyclePos.x - obstaclePos.x;
+                const dz = motorcyclePos.z - obstaclePos.z;
+                const dy = motorcyclePos.y - obstaclePos.y;
+                const distance = Math.sqrt(dx * dx + dz * dz);
+                
+                // Si on saute et qu'on est assez haut, on évite la collision
+                if (distance < 3 && (motorcyclePos.y < 2.5 || dy < 1.5)) {
+                    gameRunning = false;
+                    gameOver();
+                }
+            });
+        }
+
+        function update() {
+            if (!gameRunning || !gameStarted) return;
+
+            // Mouvement de la moto
+            if (keys['ArrowLeft'] && motorcycle.position.x > -8) {
+                motorcycle.position.x -= 0.3;
+                motorcycle.rotation.z = Math.min(motorcycle.rotation.z + 0.05, 0.2);
+            } else if (keys['ArrowRight'] && motorcycle.position.x < 8) {
+                motorcycle.position.x += 0.3;
+                motorcycle.rotation.z = Math.max(motorcycle.rotation.z - 0.05, -0.2);
+            } else {
+                motorcycle.rotation.z *= 0.95;
+            }
+
+            // Gestion du saut
+            if (keys[' '] && jumpCooldown <= 0 && !isJumping) {
+                // Déclencher le saut
+                isJumping = true;
+                jumpSpeed = JUMP_FORCE;
+                jumpCooldown = JUMP_COOLDOWN_TIME;
+                score += 5; // Bonus pour le saut
+            }
+
+            // Physique du saut
+            if (isJumping) {
+                jumpHeight += jumpSpeed;
+                jumpSpeed -= 0.025; // Gravité
+                
+                motorcycle.position.y = jumpHeight;
+                
+                // Rotation pendant le saut pour l'effet visuel
+                motorcycle.rotation.x = jumpSpeed * 2;
+                
+                // Atterrissage
+                if (jumpHeight <= 0) {
+                    jumpHeight = 0;
+                    motorcycle.position.y = 0;
+                    motorcycle.rotation.x = 0;
+                    isJumping = false;
+                }
+            }
+
+            // Cooldown du saut
+            if (jumpCooldown > 0) {
+                jumpCooldown--;
+            }
+
+            // Mouvement des obstacles
+            obstacles.forEach((obstacle, index) => {
+                obstacle.position.z += gameSpeed * 5;
+                
+                if (obstacle.position.z > 20) {
+                    scene.remove(obstacle);
+                    obstacles.splice(index, 1);
+                    score += 10;
+                }
+            });
+
+            // Mouvement de l'environnement
+            roadSegments.forEach(segment => {
+                segment.position.z += gameSpeed * 5;
+                if (segment.position.z > 20) {
+                    segment.position.z -= 400;
+                }
+            });
+
+            trees.forEach(tree => {
+                tree.position.z += gameSpeed * 5;
+                if (tree.position.z > 50) {
+                    tree.position.z -= 500;
+                }
+            });
+
+            // Spawn obstacles
+            if (Math.random() < 0.02 + gameSpeed * 0.05) {
+                spawnObstacle();
+            }
+
+            // Augmentation progressive de la vitesse
+            gameSpeed = Math.min(0.8, 0.2 + score * 0.001);
+            distance += gameSpeed * 10;
+
+            // Vérification des collisions
+            checkCollisions();
+
+            // Mise à jour UI
+            scoreElement.textContent = score;
+            speedElement.textContent = Math.floor(gameSpeed * 10);
+            distanceElement.textContent = Math.floor(distance);
+            
+            // Mise à jour UI du saut
+            if (jumpCooldown <= 0) {
+                jumpStatusElement.textContent = 'PRÊT';
+                jumpStatusElement.style.color = '#00ff00';
+                jumpCooldownFill.style.width = '100%';
+                jumpCooldownFill.style.background = '#00ff00';
+            } else {
+                jumpStatusElement.textContent = `${Math.ceil(jumpCooldown / 60)}s`;
+                jumpStatusElement.style.color = '#ff6600';
+                const percentage = ((JUMP_COOLDOWN_TIME - jumpCooldown) / JUMP_COOLDOWN_TIME) * 100;
+                jumpCooldownFill.style.width = percentage + '%';
+                jumpCooldownFill.style.background = '#ff6600';
+            }
+        }
+
+        function gameOver() {
+            finalScoreElement.textContent = score;
+            finalDistanceElement.textContent = Math.floor(distance);
+            gameOverDiv.style.display = 'block';
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            update();
+            
+            // Animation de la caméra
+            if (gameStarted && gameRunning) {
+                camera.position.x = motorcycle.position.x * 0.3;
+                camera.position.z = motorcycle.position.z + 15;
+            }
+            
+            renderer.render(scene, camera);
+        }
+
+        // Initialisation du jeu
+        init();
+    </script>
+</body>
+</html>
