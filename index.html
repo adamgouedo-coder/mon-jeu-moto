@@ -220,6 +220,29 @@
             
             // Créer la route
             createRoad();
+            function createRoad() {
+    for (let i = 0; i < 20; i++) {
+        const roadGeometry = new THREE.PlaneGeometry(20, 20);
+        const roadMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
+
+        const roadSegment = new THREE.Mesh(roadGeometry, roadMaterial);
+        roadSegment.rotation.x = -Math.PI / 2;
+        roadSegment.position.set(0, 0, -i * 20);
+        scene.add(roadSegment);
+        roadSegments.push(roadSegment);
+    }
+
+    // 🌍 SOL GLOBAL
+    const groundGeometry = new THREE.PlaneGeometry(500, 1000);
+    const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x2e8b57 });
+
+    ground = new THREE.Mesh(groundGeometry, groundMaterial);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.01;
+    ground.position.z = -300;
+
+    scene.add(ground);
+}
             
             // Créer la moto
             createMotorcycle();
