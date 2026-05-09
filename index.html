@@ -226,6 +226,16 @@
             
             // Créer l'environnement
             createEnvironment();
+             // 🌍 SOL
+    const groundGeometry = new THREE.PlaneGeometry(500, 1000);
+    const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x2e8b57 });
+    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.01;
+    ground.position.z = -300;
+
+    scene.add(ground);
 
             // Événements
             setupEventListeners();
