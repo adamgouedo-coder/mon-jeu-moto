@@ -849,10 +849,25 @@
             }
         }
 
-        function gameOver() {
-            finalScoreElement.textContent = score;
-            finalDistanceElement.textContent = Math.floor(distance);
-            gameOverDiv.style.display = 'block';
+       function gameOver() {
+
+    if (!gameRunning) return; // évite double déclenchement
+
+    gameRunning = false;
+
+    finalScoreElement.textContent = score;
+    finalDistanceElement.textContent = Math.floor(distance);
+
+    gameOverDiv.style.display = 'block';
+
+    // 💾 envoi score Vercel (safe)
+    try {
+        saveScore("Player", score);
+        loadLeaderboard();
+    } catch (e) {
+        console.log("API error:", e);
+    }
+}
         }
 
         function animate() {
