@@ -1,67 +1,52 @@
 
-// ======================
-// SAUVEGARDE SCORE
-// ======================
+// =======================
+// SCORE API
+// =======================
 
 async function saveScore(username, score) {
 
   await fetch("/api/scores", {
-
     method: "POST",
-
-    headers: {
-      "Content-Type": "application/json"
-    },
-
-    body: JSON.stringify({
-      username,
-      score
-    })
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, score })
   });
 }
 
 
-// ======================
-// CHARGER LE LEADERBOARD
-// ======================
+// =======================
+// LEADERBOARD
+// =======================
 
 async function loadLeaderboard() {
 
-  const response = await fetch("/api/scores");
+  const res = await fetch("/api/scores");
+  const data = await res.json();
 
-  const scores = await response.json();
+  const lb = document.getElementById("leaderboard");
 
-  const leaderboard = document.getElementById("leaderboard");
+  lb.innerHTML = "<h3>🏆 TOP PLAYERS</h3>";
 
-  leaderboard.innerHTML = "";
-
-  scores.forEach((player, index) => {
-
-    leaderboard.innerHTML += `
-      <p>
-        #${index + 1} ${player.username} - ${player.score}
-      </p>
+  data.forEach((p, i) => {
+    lb.innerHTML += `
+      <div>#${i+1} ${p.username} - ${p.score}</div>
     `;
   });
 }
 
 
-// ======================
-// FIN DE PARTIE (à brancher à ton jeu)
-// ======================
+// =======================
+// GAME OVER (à appeler dans ton jeu)
+// =======================
 
 function gameOver(score) {
 
-  const username = "Player"; // tu peux changer ou demander un pseudo
-
-  saveScore(username, score);
-
+  saveScore("Player", score);
   loadLeaderboard();
 }
 
 
-// ======================
-// AU CHARGEMENT
-// ======================
+// =======================
+// AU DÉMARRAGE
+// =======================
 
 loadLeaderboard();
