@@ -142,7 +142,9 @@
                 </div>
             </div>
         </div>
-
+        
+        <div id="leaderboard"></div>
+        
         <div id="gameOver">
             <h2>💥 CRASH!</h2>
             <p style="font-size: 18px;">Score final: <span id="finalScore">0</span></p>
@@ -870,5 +872,40 @@
         // Initialisation du jeu
         init();
     </script>
+    <script>
+    // SCORE API
+    async function saveScore(username, score) {
+        await fetch("/api/scores", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, score })
+        });
+    }
+
+    async function loadLeaderboard() {
+        try {
+            const res = await fetch("/api/scores");
+            const data = await res.json();
+
+            const lb = document.getElementById("leaderboard");
+
+            lb.innerHTML = "<b>🏆 TOP PLAYERS</b><br>";
+
+            data.forEach((p, i) => {
+                lb.innerHTML += `#${i+1} ${p.username} - ${p.score}<br>`;
+            });
+
+        } catch (e) {
+            console.log("Leaderboard error", e);
+        }
+    }
+
+    function gameOver(score) {
+        saveScore("Player", score);
+        loadLeaderboard();
+    }
+
+    loadLeaderboard();
+</script>
 </body>
 </html>
