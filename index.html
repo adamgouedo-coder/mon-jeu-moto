@@ -821,7 +821,9 @@
             if (Math.random() < 0.02 + gameSpeed * 0.05) {
                 spawnObstacle();
             }
-
+            
+            let gameOverTriggered = false;
+            
             // Augmentation progressive de la vitesse
             gameSpeed = Math.min(0.8, 0.2 + score * 0.001);
             distance += gameSpeed * 10;
@@ -849,9 +851,10 @@
             }
         }
 
-       function gameOver() {
+      function gameOver() {
 
-    if (!gameRunning) return; // évite double déclenchement
+    if (gameOverTriggered) return; // 💥 bloque les appels multiples
+    gameOverTriggered = true;
 
     gameRunning = false;
 
@@ -860,12 +863,11 @@
 
     gameOverDiv.style.display = 'block';
 
-    // 💾 envoi score Vercel (safe)
     try {
         saveScore("Player", score);
         loadLeaderboard();
     } catch (e) {
-        console.log("API error:", e);
+        console.log("API error", e);
     }
 }
         }
