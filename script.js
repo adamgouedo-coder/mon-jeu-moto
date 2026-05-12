@@ -1,15 +1,17 @@
-
 // =======================
 // SCORE API
 // =======================
 
 async function saveScore(username, score) {
-
-  await fetch("/api/scores", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, score })
-  });
+  try {
+    await fetch("/api/scores", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, score })
+    });
+  } catch (err) {
+    console.log("Erreur saveScore :", err);
+  }
 }
 
 
@@ -18,35 +20,33 @@ async function saveScore(username, score) {
 // =======================
 
 async function loadLeaderboard() {
+  try {
+    const res = await fetch("/api/scores");
+    const data = await res.json();
 
-  const res = await fetch("/api/scores");
-  const data = await res.json();
+    const lb = document.getElementById("leaderboard");
+    if (!lb) return;
 
-  const lb = document.getElementById("leaderboard");
+    lb.innerHTML = "<h3>🏆 TOP PLAYERS</h3>";
 
-  lb.innerHTML = "<h3>🏆 TOP PLAYERS</h3>";
+    data.forEach((p, i) => {
+      lb.innerHTML += `
+        <div>#${i + 1} ${p.username} - ${p.score}</div>
+      `;
+    });
 
-  data.forEach((p, i) => {
-    lb.innerHTML += `
-      <div>#${i+1} ${p.username} - ${p.score}</div>
-    `;
-  });
+  } catch (err) {
+    console.log("Erreur leaderboard :", err);
+  }
 }
 
 
 // =======================
-// GAME OVER (à appeler dans ton jeu)
+// GAME OVER (version connectée)
 // =======================
 
-function gameOver(score) {
-
-  saveScore("Player", score);
-  loadLeaderboard();
+// ⚠️ IMPORTANT : cette fonction remplace l'ancienne logique API
+async function sendGameOverScore(score) {
+  await saveScore("Player", score);
+  await loadLeaderboard();
 }
-
-
-// =======================
-// AU DÉMARRAGE
-// =======================
-
-loadLeaderboard();
